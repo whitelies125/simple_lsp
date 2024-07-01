@@ -3,8 +3,8 @@
 # Imports
 # -------------------------------------------------------------------------------
 from tree_sitter_languages import get_language, get_parser
-language = get_language("python")
-parser = get_parser("python")
+language = get_language("cpp")
+parser = get_parser("cpp")
 
 import logging
 import re
@@ -47,37 +47,37 @@ def CheckDiffTypeAssign(ls, params, diagnostics):
     tree = parser.parse(source.encode())
     root_node = tree.root_node
 
-    var_condition = "(assignment left: (identifier) @var right: (_) @type)"
-    var_query = language.query(var_condition)
-    var_result = var_query.captures(root_node)
+    condition = """
+    (function_definition
+        type: (_) @func_ret_type
+        body: (compound_statement (return_statement (_) @ret_type)))
+    """
+    query = language.query(condition)
+    result = query.captures(root_node)
 
-
-    # diagnostics = []
-    dic = {}
-    var = ""
-    typ = ""
-    for node, name in var_result:
-        if (name == 'var'):
-            var = node.text.decode('utf-8')
-            logging.info("var : %s", var)
-        if (name == 'type'):
-            typ = node.type
-            if typ == "identifier":
-                typ = dic[node.text.decode('utf-8')]
-            logging.info("type : %s", typ)
-            if var in dic:
-                if dic[var] != typ:
-                    msg = "type does not match"
-                    s1,s2 = node.start_point
-                    e1,e2 = node.end_point
-                    d = Diagnostic(Range(Position(s1,s2), Position(e1,e2)),
-                                   msg,
-                                   source=type(server).__name__)
-                    diagnostics.append(d)
-            else:
-                dic[var] = typ
-    # ls.publish_diagnostics(text_doc.uri, diagnostics)
-    logging.info("diagnostics.size() : %d", len(diagnostics))
+    func_ret_type = ""
+    ret_type = ""
+    for node, name in result:
+        print("node.type : ", node.type)
+        if (name == 'func_ret_type'):
+            func_ret_type = node.text.decode('utf-8')
+            print("func_ret_type : ", func_ret_type)
+        if (name == 'ret_type'):
+            if(node.type == "primitive_type"):
+                ret_type = node.text.decode('utf-8')
+            if(node.type == "binary_expression" or node.type == "false" or node.type == "true"):
+                ret_type = "bool"
+            if node.type == "number_literal" :
+                ret_type = "int"
+            print("ret_type : ", ret_type)
+            if (ret_type != func_ret_type):
+                msg = "func type and return type not match"
+                s1,s2 = node.start_point
+                e1,e2 = node.end_point
+                d = Diagnostic(Range(Position(s1,s2), Position(e1,e2)),
+                                msg,
+                                source=type(server).__name__)
+                diagnostics.append(d)
 
 def CheckFunctionNoUser(ls, params, diagnostics):
     text_doc = ls.workspace.get_document(params.text_document.uri)
